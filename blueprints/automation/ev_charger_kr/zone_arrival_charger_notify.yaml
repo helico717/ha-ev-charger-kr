@@ -3,7 +3,8 @@ blueprint:
   description: >-
     지정한 사용자(person)가 설정된 구역(최대 3개) 중 한 곳에 진입하면,
     해당 구역에 매핑된 1개 이상의 전기차 충전소 센서에서 현재 충전 가능 대수를
-    모바일 앱 알림으로 전송합니다.
+    모바일 앱 알림으로 전송합니다. 자동화 화면에서 '실행'을 누르면 설정된 모든 구역의
+    테스트 알림을 즉시 발송합니다.
   domain: automation
   source_url: https://github.com/helico717/ha-ev-charger-kr/blob/main/blueprints/automation/ev_charger_kr/zone_arrival_charger_notify.yaml
   input:
@@ -127,70 +128,81 @@ conditions:
 
 actions:
   - variables:
-      entered_zone_name: "{{ trigger.to_state.state }}"
       z1_name: "{{ state_attr(zone_1_input, 'friendly_name') if zone_1_input else '' }}"
       z2_name: "{{ state_attr(zone_2_input, 'friendly_name') if zone_2_input else '' }}"
       z3_name: "{{ state_attr(zone_3_input, 'friendly_name') if zone_3_input else '' }}"
-      matched_sensors: >-
-        {% if z1_name and entered_zone_name == z1_name %}
-          {{ zone_1_sensors_input }}
-        {% elif z2_name and entered_zone_name == z2_name %}
-          {{ zone_2_sensors_input }}
-        {% elif z3_name and entered_zone_name == z3_name %}
-          {{ zone_3_sensors_input }}
+      target_batches: >-
+        {% set ns = namespace(batches=[]) %}
+        {% if trigger is defined and trigger.to_state is defined %}
+          {% set entered = trigger.to_state.state %}
+          {% if z1_name and entered == z1_name and zone_1_sensors_input | length > 0 %}
+            {% set ns.batches = ns.batches + [{'zone': z1_name, 'sensors': zone_1_sensors_input}] %}
+          {% elif z2_name and entered == z2_name and zone_2_sensors_input | length > 0 %}
+            {% set ns.batches = ns.batches + [{'zone': z2_name, 'sensors': zone_2_sensors_input}] %}
+          {% elif z3_name and entered == z3_name and zone_3_sensors_input | length > 0 %}
+            {% set ns.batches = ns.batches + [{'zone': z3_name, 'sensors': zone_3_sensors_input}] %}
+          {% endif %}
         {% else %}
-          []
+          {% if z1_name and zone_1_sensors_input | length > 0 %}
+            {% set ns.batches = ns.batches + [{'zone': z1_name, 'sensors': zone_1_sensors_input}] %}
+          {% endif %}
+          {% if z2_name and zone_2_sensors_input | length > 0 %}
+            {% set ns.batches = ns.batches + [{'zone': z2_name, 'sensors': zone_2_sensors_input}] %}
+          {% endif %}
+          {% if z3_name and zone_3_sensors_input | length > 0 %}
+            {% set ns.batches = ns.batches + [{'zone': z3_name, 'sensors': zone_3_sensors_input}] %}
+          {% endif %}
         {% endif %}
-  - if:
-      - condition: template
-        value_template: "{{ matched_sensors | length > 0 }}"
-    then:
-      - if:
-          - condition: template
-            value_template: "{{ refresh_before_notify_input }}"
-        then:
-          - action: homeassistant.update_entity
-            target:
-              entity_id: "{{ matched_sensors }}"
-          - delay:
-              seconds: 2
-      - if:
-          - condition: template
-            value_template: >-
-              {% if not only_when_available_input %}
-                true
-              {% else %}
-                {% set ns = namespace(has_avail=false) %}
-                {% for entity_id in matched_sensors %}
-                  {% if states(entity_id) | int(0) > 0 %}
-                    {% set ns.has_avail = true %}
+        {{ ns.batches }}
+  - repeat:
+      for_each: "{{ target_batches }}"
+      sequence:
+        - if:
+            - condition: template
+              value_template: "{{ refresh_before_notify_input }}"
+          then:
+            - action: homeassistant.update_entity
+              target:
+                entity_id: "{{ repeat.item.sensors }}"
+            - delay:
+                seconds: 2
+        - if:
+            - condition: template
+              value_template: >-
+                {% if not only_when_available_input %}
+                  true
+                {% else %}
+                  {% set ns = namespace(has_avail=false) %}
+                  {% for entity_id in repeat.item.sensors %}
+                    {% if states(entity_id) | int(0) > 0 %}
+                      {% set ns.has_avail = true %}
+                    {% endif %}
+                  {% endfor %}
+                  {{ ns.has_avail }}
+                {% endif %}
+          then:
+            - domain: mobile_app
+              type: notify
+              device_id: !input notify_device
+              title: !input notification_title
+              message: >-
+                {% set ns = namespace(lines=[repeat.item.zone ~ ' 도착 — 현재 충전 가능 대수']) %}
+                {% for entity_id in repeat.item.sensors %}
+                  {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
+                  {% set avail = states(entity_id) %}
+                  {% set fast = state_attr(entity_id, 'fast_available_chargers') %}
+                  {% set slow = state_attr(entity_id, 'slow_available_chargers') %}
+                  {% set detail = [] %}
+                  {% if fast is not none and fast | int(0) > 0 %}
+                    {% set detail = detail + ['급속 ' ~ fast ~ '대'] %}
                   {% endif %}
+                  {% if slow is not none and slow | int(0) > 0 %}
+                    {% set detail = detail + ['완속 ' ~ slow ~ '대'] %}
+                  {% endif %}
+                  {% set suffix = ' (' ~ (detail | join(', ')) ~ ')' if detail | length > 0 else '' %}
+                  {% set ns.lines = ns.lines + ['• ' ~ name ~ ': ' ~ avail ~ '대' ~ suffix] %}
                 {% endfor %}
-                {{ ns.has_avail }}
-              {% endif %}
-        then:
-          - domain: mobile_app
-            type: notify
-            device_id: !input notify_device
-            title: !input notification_title
-            message: >-
-              {% set ns = namespace(lines=[entered_zone_name ~ ' 도착 — 현재 충전 가능 대수']) %}
-              {% for entity_id in matched_sensors %}
-                {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
-                {% set avail = states(entity_id) %}
-                {% set fast = state_attr(entity_id, 'fast_available_chargers') %}
-                {% set slow = state_attr(entity_id, 'slow_available_chargers') %}
-                {% set detail = [] %}
-                {% if fast is not none and fast | int(0) > 0 %}
-                  {% set detail = detail + ['급속 ' ~ fast ~ '대'] %}
-                {% endif %}
-                {% if slow is not none and slow | int(0) > 0 %}
-                  {% set detail = detail + ['완속 ' ~ slow ~ '대'] %}
-                {% endif %}
-                {% set suffix = ' (' ~ (detail | join(', ')) ~ ')' if detail | length > 0 else '' %}
-                {% set ns.lines = ns.lines + ['• ' ~ name ~ ': ' ~ avail ~ '대' ~ suffix] %}
-              {% endfor %}
-              {{ ns.lines | join('\n') }}
+                {{ ns.lines | join('\n') }}
 
 mode: single
 max_exceeded: silent
