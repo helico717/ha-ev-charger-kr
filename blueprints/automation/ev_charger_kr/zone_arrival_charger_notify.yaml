@@ -1,8 +1,9 @@
 blueprint:
-  name: EV Charger KR - 구역 진입 시 충전 가능 대수 알림
+  name: EV Charger KR - 구역별 충전 가능 대수 알림
   description: >-
-    지정한 사용자(person)가 설정된 구역(zone)에 진입하면, 선택한 1개 이상의
-    전기차 충전소 센서의 현재 충전 가능 대수를 모바일 앱 알림으로 전송합니다.
+    지정한 사용자(person)가 설정된 구역(최대 3개) 중 한 곳에 진입하면,
+    해당 구역에 매핑된 1개 이상의 전기차 충전소 센서에서 현재 충전 가능 대수를
+    모바일 앱 알림으로 전송합니다.
   domain: automation
   source_url: https://github.com/helico717/ha-ev-charger-kr/blob/main/blueprints/automation/ev_charger_kr/zone_arrival_charger_notify.yaml
   input:
@@ -13,23 +14,6 @@ blueprint:
         entity:
           filter:
             - domain: person
-    target_zone:
-      name: 진입 감지 구역 (Zone, 1개 이상 선택)
-      description: 진입 시 알림을 보낼 Home Assistant 구역(집, 직장 등)을 하나 이상 선택하세요.
-      selector:
-        entity:
-          multiple: true
-          filter:
-            - domain: zone
-    charger_sensors:
-      name: 충전 가능 대수 센서 (1개 이상 선택)
-      description: 알림에 포함할 EV Charger KR '충전 가능 대수' 센서를 하나 이상 선택하세요.
-      selector:
-        entity:
-          multiple: true
-          filter:
-            - domain: sensor
-              integration: ev_charger_kr
     notify_device:
       name: 알림을 받을 모바일 기기
       description: Home Assistant Companion 앱이 설치된 모바일 기기를 선택하세요.
@@ -37,6 +21,72 @@ blueprint:
         device:
           filter:
             - integration: mobile_app
+    zone_1_group:
+      name: 구역 1 설정 (필수)
+      icon: mdi:map-marker
+      input:
+        zone_1:
+          name: 구역 1
+          description: 첫 번째 감지 구역을 선택하세요.
+          selector:
+            entity:
+              filter:
+                - domain: zone
+        zone_1_sensors:
+          name: 구역 1 충전 가능 대수 센서 (1개 이상)
+          description: 구역 1 도착 시 알림을 받을 '충전 가능 대수' 센서를 선택하세요.
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: sensor
+                  integration: ev_charger_kr
+    zone_2_group:
+      name: 구역 2 설정 (선택)
+      icon: mdi:map-marker-plus
+      collapsed: true
+      input:
+        zone_2:
+          name: 구역 2
+          description: 두 번째 감지 구역이 있다면 선택하세요.
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: zone
+        zone_2_sensors:
+          name: 구역 2 충전 가능 대수 센서
+          description: 구역 2 도착 시 알림을 받을 '충전 가능 대수' 센서를 선택하세요.
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: sensor
+                  integration: ev_charger_kr
+    zone_3_group:
+      name: 구역 3 설정 (선택)
+      icon: mdi:map-marker-plus
+      collapsed: true
+      input:
+        zone_3:
+          name: 구역 3
+          description: 세 번째 감지 구역이 있다면 선택하세요.
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: zone
+        zone_3_sensors:
+          name: 구역 3 충전 가능 대수 센서
+          description: 구역 3 도착 시 알림을 받을 '충전 가능 대수' 센서를 선택하세요.
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: sensor
+                  integration: ev_charger_kr
     notification_title:
       name: 알림 제목
       default: "전기차 충전소 현황 안내"
@@ -50,73 +100,97 @@ blueprint:
         boolean:
     only_when_available:
       name: 충전 가능 대수가 1대 이상일 때만 알림
-      description: 선택한 모든 충전소가 만차(0대)일 때는 알림을 보내지 않습니다.
+      description: 해당 구역에 매핑된 모든 충전소가 만차(0대)일 때는 알림을 보내지 않습니다.
       default: false
       selector:
         boolean:
 
 variables:
-  charger_sensors_input: !input charger_sensors
-  target_zone_input: !input target_zone
+  zone_1_input: !input zone_1
+  zone_1_sensors_input: !input zone_1_sensors
+  zone_2_input: !input zone_2
+  zone_2_sensors_input: !input zone_2_sensors
+  zone_3_input: !input zone_3
+  zone_3_sensors_input: !input zone_3_sensors
   refresh_before_notify_input: !input refresh_before_notify
   only_when_available_input: !input only_when_available
 
 triggers:
-  - trigger: zone
+  - trigger: state
     entity_id: !input person_entity
-    zone: !input target_zone
-    event: enter
 
-conditions: []
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none and
+         (trigger.from_state is none or trigger.from_state.state != trigger.to_state.state) }}
 
 actions:
+  - variables:
+      entered_zone_name: "{{ trigger.to_state.state }}"
+      z1_name: "{{ state_attr(zone_1_input, 'friendly_name') if zone_1_input else '' }}"
+      z2_name: "{{ state_attr(zone_2_input, 'friendly_name') if zone_2_input else '' }}"
+      z3_name: "{{ state_attr(zone_3_input, 'friendly_name') if zone_3_input else '' }}"
+      matched_sensors: >-
+        {% if z1_name and entered_zone_name == z1_name %}
+          {{ zone_1_sensors_input }}
+        {% elif z2_name and entered_zone_name == z2_name %}
+          {{ zone_2_sensors_input }}
+        {% elif z3_name and entered_zone_name == z3_name %}
+          {{ zone_3_sensors_input }}
+        {% else %}
+          []
+        {% endif %}
   - if:
       - condition: template
-        value_template: "{{ refresh_before_notify_input }}"
+        value_template: "{{ matched_sensors | length > 0 }}"
     then:
-      - action: homeassistant.update_entity
-        target:
-          entity_id: "{{ charger_sensors_input }}"
-      - delay:
-          seconds: 2
-  - if:
-      - condition: template
-        value_template: >-
-          {% if not only_when_available_input %}
-            true
-          {% else %}
-            {% set ns = namespace(has_avail=false) %}
-            {% for entity_id in charger_sensors_input %}
-              {% if states(entity_id) | int(0) > 0 %}
-                {% set ns.has_avail = true %}
+      - if:
+          - condition: template
+            value_template: "{{ refresh_before_notify_input }}"
+        then:
+          - action: homeassistant.update_entity
+            target:
+              entity_id: "{{ matched_sensors }}"
+          - delay:
+              seconds: 2
+      - if:
+          - condition: template
+            value_template: >-
+              {% if not only_when_available_input %}
+                true
+              {% else %}
+                {% set ns = namespace(has_avail=false) %}
+                {% for entity_id in matched_sensors %}
+                  {% if states(entity_id) | int(0) > 0 %}
+                    {% set ns.has_avail = true %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.has_avail }}
               {% endif %}
-            {% endfor %}
-            {{ ns.has_avail }}
-          {% endif %}
-    then:
-      - domain: mobile_app
-        type: notify
-        device_id: !input notify_device
-        title: !input notification_title
-        message: >-
-          {% set zone_name = (trigger.zone.attributes.friendly_name if trigger is defined and trigger.zone is defined else (state_attr(target_zone_input[0], 'friendly_name') if target_zone_input is sequence and target_zone_input | length > 0 else '지정 구역')) %}
-          {% set ns = namespace(lines=[zone_name ~ ' 도착 — 현재 충전 가능 대수']) %}
-          {% for entity_id in charger_sensors_input %}
-            {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
-            {% set avail = states(entity_id) %}
-            {% set fast = state_attr(entity_id, 'fast_available_chargers') %}
-            {% set slow = state_attr(entity_id, 'slow_available_chargers') %}
-            {% set detail = [] %}
-            {% if fast is not none and fast | int(0) > 0 %}
-              {% set detail = detail + ['급속 ' ~ fast ~ '대'] %}
-            {% endif %}
-            {% if slow is not none and slow | int(0) > 0 %}
-              {% set detail = detail + ['완속 ' ~ slow ~ '대'] %}
-            {% endif %}
-            {% set suffix = ' (' ~ (detail | join(', ')) ~ ')' if detail | length > 0 else '' %}
-            {% set ns.lines = ns.lines + ['• ' ~ name ~ ': ' ~ avail ~ '대' ~ suffix] %}
-          {% endfor %}
-          {{ ns.lines | join('\n') }}
+        then:
+          - domain: mobile_app
+            type: notify
+            device_id: !input notify_device
+            title: !input notification_title
+            message: >-
+              {% set ns = namespace(lines=[entered_zone_name ~ ' 도착 — 현재 충전 가능 대수']) %}
+              {% for entity_id in matched_sensors %}
+                {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
+                {% set avail = states(entity_id) %}
+                {% set fast = state_attr(entity_id, 'fast_available_chargers') %}
+                {% set slow = state_attr(entity_id, 'slow_available_chargers') %}
+                {% set detail = [] %}
+                {% if fast is not none and fast | int(0) > 0 %}
+                  {% set detail = detail + ['급속 ' ~ fast ~ '대'] %}
+                {% endif %}
+                {% if slow is not none and slow | int(0) > 0 %}
+                  {% set detail = detail + ['완속 ' ~ slow ~ '대'] %}
+                {% endif %}
+                {% set suffix = ' (' ~ (detail | join(', ')) ~ ')' if detail | length > 0 else '' %}
+                {% set ns.lines = ns.lines + ['• ' ~ name ~ ': ' ~ avail ~ '대' ~ suffix] %}
+              {% endfor %}
+              {{ ns.lines | join('\n') }}
 
 mode: single
 max_exceeded: silent
