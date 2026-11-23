@@ -33,6 +33,7 @@ from ev_charger_kr_test_pkg.api import (  # noqa: E402
     EvChargerAuthError,
     EvChargerNotFoundError,
     aggregate_station_status,
+    calculate_auto_scan_interval,
     extract_items,
     normalize_service_key,
     search_stations_from_items,
@@ -157,37 +158,45 @@ class TestEvChargerApi(unittest.TestCase):
     def test_search_stations_from_items(self) -> None:
         items = [
             {
-                "statId": "PI712604",
-                "statNm": "의왕반도보라빌리지2단지",
-                "addr": "경기도 의왕시 갈미로 32",
-                "busiNm": "GS차지비",
+                "statId": "ME000010",
+                "statNm": "서울시청 서소문청사",
+                "addr": "서울특별시 중구 덕수궁길 15",
+                "busiNm": "환경부",
                 "chgerId": "01",
             },
             {
-                "statId": "PI712604",
-                "statNm": "의왕반도보라빌리지2단지",
-                "addr": "경기도 의왕시 갈미로 32",
-                "busiNm": "GS차지비",
+                "statId": "ME000010",
+                "statNm": "서울시청 서소문청사",
+                "addr": "서울특별시 중구 덕수궁길 15",
+                "busiNm": "환경부",
                 "chgerId": "02",
             },
             {
-                "statId": "CV000372",
-                "statNm": "남서울대학교",
-                "addr": "충청남도 천안시 서북구 성환읍 대학로 91",
+                "statId": "CV000999",
+                "statNm": "판교역 공영주차장",
+                "addr": "경기도 성남시 분당구 판교역로 160",
                 "busiNm": "채비",
                 "chgerId": "01",
             },
         ]
-        results = search_stations_from_items(items, "반도보라")
+        results = search_stations_from_items(items, "서울시청")
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].stat_id, "PI712604")
+        self.assertEqual(results[0].stat_id, "ME000010")
         self.assertEqual(results[0].charger_count, 2)
-        self.assertEqual(results[0].busi_name, "GS차지비")
+        self.assertEqual(results[0].busi_name, "환경부")
 
-        addr_results = search_stations_from_items(items, "갈미로 32")
-        self.assertEqual([r.stat_id for r in addr_results], ["PI712604"])
+        addr_results = search_stations_from_items(items, "판교역로 160")
+        self.assertEqual([r.stat_id for r in addr_results], ["CV000999"])
 
         self.assertEqual(search_stations_from_items(items, "   "), [])
+
+    def test_calculate_auto_scan_interval(self) -> None:
+        self.assertEqual(calculate_auto_scan_interval(1, 1000), 2)
+        self.assertEqual(calculate_auto_scan_interval(2, 1000), 4)
+        self.assertEqual(calculate_auto_scan_interval(3, 1000), 6)
+        self.assertEqual(calculate_auto_scan_interval(5, 1000), 9)
+        self.assertEqual(calculate_auto_scan_interval(10, 1000), 17)
+        self.assertEqual(calculate_auto_scan_interval(100, 1000), 60)
 
 
 if __name__ == "__main__":

@@ -12,10 +12,10 @@
         }
       },
       "select_station": {
-        "title": "Select Charging Station",
-        "description": "Choose the charging station to add from the search results.",
+        "title": "Select Charging Stations",
+        "description": "Select one or more charging stations from the search results.",
         "data": {
-          "stat_id": "Charging Station"
+          "stations": "Charging Stations"
         }
       }
     },
@@ -24,6 +24,7 @@
       "invalid_auth": "Invalid API authentication key.",
       "station_not_found": "No chargers found for the given Station ID.",
       "no_stations_found": "No charging stations matched your region and keyword.",
+      "no_station_selected": "Select at least one charging station.",
       "missing_search_or_id": "Enter a search keyword or a Station ID (statId).",
       "unknown": "Unexpected error occurred."
     },
@@ -35,8 +36,41 @@
     "step": {
       "init": {
         "title": "EV Charger KR Options",
+        "menu_options": {
+          "interval": "Polling Interval (Auto / Manual)",
+          "add_station": "Add Charging Stations",
+          "manage_stations": "Manage Registered Stations"
+        }
+      },
+      "interval": {
+        "title": "Polling Interval",
+        "description": "When automatic adjustment is enabled, the polling interval scales automatically based on the number of registered stations and the daily API limit.",
         "data": {
-          "scan_interval": "Polling interval (minutes)"
+          "auto_interval": "Auto-adjust polling interval by station count (Recommended)",
+          "scan_interval": "Manual polling interval (minutes, when auto is off)"
+        }
+      },
+      "add_station": {
+        "title": "Search Stations to Add",
+        "description": "Select a region and enter a keyword to search for more stations.",
+        "data": {
+          "zcode": "Region (Si/Do)",
+          "keyword": "Station Name or Address Keyword",
+          "stat_id": "Station ID (statId, optional)"
+        }
+      },
+      "add_station_select": {
+        "title": "Select Stations to Add",
+        "description": "Select one or more stations to add.",
+        "data": {
+          "stations": "Charging Stations"
+        }
+      },
+      "manage_stations": {
+        "title": "Manage Registered Stations",
+        "description": "Keep checked stations; unchecked stations will be removed.",
+        "data": {
+          "stations": "Registered Stations"
         }
       }
     }
@@ -54,6 +88,9 @@
       },
       "unavailable_chargers": {
         "name": "Unavailable Chargers"
+      },
+      "api_rate_limit_remaining": {
+        "name": "API Daily Remaining Quota"
       }
     }
   }

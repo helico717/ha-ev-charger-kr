@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Any
 from urllib.parse import unquote
 
 from .const import (
     CHARGER_TYPE_LABELS,
+    DEFAULT_DAILY_LIMIT,
     ENDPOINT_CHARGER_INFO,
     ENDPOINT_CHARGER_STATUS,
     FAST_CHARGER_TYPES,
+    MAX_SCAN_INTERVAL_MINUTES,
+    MIN_SCAN_INTERVAL_MINUTES,
     SLOW_CHARGER_TYPES,
     STAT_AVAILABLE,
     STAT_CHARGING,
@@ -45,6 +49,26 @@ class ChargerDetail:
     charger_type_label: str | None = None
     output_kw: str | None = None
     stat_updated_at: str | None = None
+
+
+@dataclass
+class RateLimitInfo:
+    """Rate limit metadata parsed from data.go.kr HTTP response headers."""
+
+    remaining: int | None = None
+    limit: int | None = None
+
+
+def calculate_auto_scan_interval(
+    station_count: int,
+    daily_limit: int = DEFAULT_DAILY_LIMIT,
+) -> int:
+    """Calculate a safe polling interval (minutes) keeping daily calls within ~85% of limit."""
+    count = max(1, station_count)
+    limit = daily_limit if daily_limit and daily_limit > 0 else DEFAULT_DAILY_LIMIT
+    safe_budget = max(1, int(limit * 0.85))
+    minutes = math.ceil((1440 * count) / safe_budget)
+    return max(max(2, MIN_SCAN_INTERVAL_MINUTES), min(MAX_SCAN_INTERVAL_MINUTES, minutes))
 
 
 @dataclass
@@ -240,6 +264,21 @@ class EvChargerApiClient:
         self._service_key = normalize_service_key(api_key)
         self._charger_metadata_cache: dict[str, dict[str, dict[str, str | None]]] = {}
         self._station_name_cache: dict[str, str] = {}
+        self.rate_limit = RateLimitInfo()
+
+    def _update_rate_limit(self, headers: Any) -> None:
+        """Extract X-RateLimit-Remaining and X-RateLimit-Limit from response headers."""
+        if not headers:
+            return
+        rem_raw = headers.get("X-RateLimit-Remaining")
+        lim_raw = headers.get("X-RateLimit-Limit")
+        try:
+            if rem_raw is not None:
+                self.rate_limit.remaining = int(rem_raw)
+            if lim_raw is not None:
+                self.rate_limit.limit = int(lim_raw)
+        except (TypeError, ValueError):
+            pass
 
     async def _get_json(
         self, url: str, params: dict[str, Any], timeout: int = 20
@@ -252,6 +291,7 @@ class EvChargerApiClient:
             **params,
         }
         async with self._session.get(url, params=query, timeout=timeout) as response:
+            self._update_rate_limit(getattr(response, "headers", None))
             if response.status in {401, 403}:
                 raise EvChargerAuthError(f"HTTP {response.status}")
             if response.status != 200:

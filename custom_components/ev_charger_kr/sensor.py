@@ -19,12 +19,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import StationStatus
 from .const import DOMAIN
-from .coordinator import EvChargerCoordinator
+from .coordinator import CoordinatorData, EvChargerCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
 class EvChargerSensorDescription(SensorEntityDescription):
-    """Describes an EV Charger KR sensor entity."""
+    """Describes an EV Charger KR station sensor entity."""
 
     value_fn: Callable[[StationStatus], int]
     attr_fn: Callable[[StationStatus], dict[str, Any]] | None = None
@@ -98,14 +98,17 @@ async def async_setup_entry(
 ) -> None:
     """Set up EV Charger KR sensor entities from a config entry."""
     coordinator: EvChargerCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        EvChargerSensor(coordinator, description)
+    entities: list[SensorEntity] = [
+        EvChargerSensor(coordinator, stat_id, station_name, description)
+        for stat_id, station_name in coordinator.stations.items()
         for description in SENSOR_DESCRIPTIONS
-    )
+    ]
+    entities.append(EvChargerApiRateLimitSensor(coordinator, entry))
+    async_add_entities(entities)
 
 
 class EvChargerSensor(CoordinatorEntity[EvChargerCoordinator], SensorEntity):
-    """Representation of an EV Charger KR sensor."""
+    """Representation of an EV Charger KR station sensor."""
 
     entity_description: EvChargerSensorDescription
     _attr_has_entity_name = True
@@ -113,27 +116,101 @@ class EvChargerSensor(CoordinatorEntity[EvChargerCoordinator], SensorEntity):
     def __init__(
         self,
         coordinator: EvChargerCoordinator,
+        stat_id: str,
+        station_name: str,
         description: EvChargerSensorDescription,
     ) -> None:
         super().__init__(coordinator)
+        self._stat_id = stat_id
         self.entity_description = description
-        self._attr_unique_id = f"{coordinator.stat_id}_{description.key}"
+        self._attr_unique_id = f"{stat_id}_{description.key}"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.stat_id)},
-            name=coordinator.station_name,
+            identifiers={(DOMAIN, stat_id)},
+            name=station_name,
             manufacturer="한국환경공단 (무공해차 통합누리집)",
             model="전기차 충전소",
             entry_type=DeviceEntryType.SERVICE,
         )
 
+    def _station_status(self) -> StationStatus | None:
+        data: CoordinatorData | None = self.coordinator.data
+        if data is None:
+            return None
+        return data.stations.get(self._stat_id)
+
     @property
     def native_value(self) -> int | None:
-        if self.coordinator.data is None:
+        status = self._station_status()
+        if status is None:
             return None
-        return self.entity_description.value_fn(self.coordinator.data)
+        return self.entity_description.value_fn(status)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        if self.coordinator.data is None or self.entity_description.attr_fn is None:
+        status = self._station_status()
+        if status is None or self.entity_description.attr_fn is None:
             return None
-        return self.entity_description.attr_fn(self.coordinator.data)
+        return self.entity_description.attr_fn(status)
+
+
+class EvChargerApiRateLimitSensor(CoordinatorEntity[EvChargerCoordinator], SensorEntity):
+    """Sensor reporting remaining daily data.go.kr API quota."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "api_rate_limit_remaining"
+    _attr_icon = "mdi:api"
+    _attr_native_unit_of_measurement = "건"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: EvChargerCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_api_rate_limit_remaining"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_api")},
+            name="EV Charger KR API",
+            manufacturer="공공데이터포털 (한국환경공단)",
+            model="Open API 할당량",
+            entry_type=DeviceEntryType.SERVICE,
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        data: CoordinatorData | None = self.coordinator.data
+        if data is None:
+            return None
+        return data.rate_limit.remaining
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        data: CoordinatorData | None = self.coordinator.data
+        if data is None:
+            return None
+        limit = data.rate_limit.limit
+        remaining = data.rate_limit.remaining
+        used = (
+            max(0, limit - remaining)
+            if limit is not None and remaining is not None
+            else None
+        )
+        usage_percent = (
+            round((used / limit) * 100, 1)
+            if used is not None and limit and limit > 0
+            else None
+        )
+        interval_minutes = (
+            int(self.coordinator.update_interval.total_seconds() // 60)
+            if self.coordinator.update_interval
+            else None
+        )
+        return {
+            "daily_limit": limit,
+            "used_today": used,
+            "usage_percent": usage_percent,
+            "polling_interval_minutes": interval_minutes,
+            "auto_interval_enabled": self.coordinator.auto_interval,
+            "registered_stations_count": len(self.coordinator.stations),
+        }
