@@ -89,6 +89,7 @@ class StationStatus:
     stat_id: str
     station_name: str
     address: str | None = None
+    operator: str | None = None
     total_count: int = 0
     available_count: int = 0
     charging_count: int = 0
@@ -190,6 +191,7 @@ def aggregate_station_status(
     metadata_map = charger_metadata or {}
     station_name = fallback_station_name or stat_id
     address: str | None = None
+    operator: str | None = None
 
     available_count = 0
     charging_count = 0
@@ -203,6 +205,8 @@ def aggregate_station_status(
             station_name = str(item["statNm"])
         if item.get("addr") and not address:
             address = str(item["addr"])
+        if (item.get("busiNm") or item.get("bnm")) and not operator:
+            operator = str(item.get("busiNm") or item.get("bnm")).strip() or None
 
         chger_id = str(item.get("chgerId", "")).zfill(2)
         stat = str(item.get("stat", "0"))
@@ -246,6 +250,7 @@ def aggregate_station_status(
         stat_id=stat_id,
         station_name=station_name,
         address=address,
+        operator=operator,
         total_count=len(chargers),
         available_count=available_count,
         charging_count=charging_count,

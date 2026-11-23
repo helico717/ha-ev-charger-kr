@@ -89,9 +89,9 @@ blueprint:
                 - domain: sensor
                   integration: ev_charger_kr
     notification_title:
-      name: 알림 제목 (비워두면 구역명·총 가능 대수 자동 표시)
-      description: "예: 비워두면 '[학교 도착] 충전 가능 7대' 형태로 자동 표시됩니다."
-      default: ""
+      name: 알림 제목
+      description: 모바일 알림 상단에 고정으로 표시할 제목입니다.
+      default: "사용가능한 충전기 알림"
       selector:
         text:
     refresh_before_notify:
@@ -186,40 +186,33 @@ actions:
             - domain: mobile_app
               type: notify
               device_id: !input notify_device
-              title: >-
-                {% set custom_title = notification_title_input | default('', true) | trim %}
-                {% if custom_title %}
-                  {{ custom_title }}
-                {% else %}
-                  {% set ns = namespace(total_avail=0) %}
-                  {% for entity_id in repeat.item.sensors %}
-                    {% set ns.total_avail = ns.total_avail + (states(entity_id) | int(0)) %}
-                  {% endfor %}
-                  {% if ns.total_avail > 0 %}
-                    [{{ repeat.item.zone }} 도착] 충전 가능 {{ ns.total_avail }}대
-                  {% else %}
-                    [{{ repeat.item.zone }} 도착] 충전 가능 없음
-                  {% endif %}
-                {% endif %}
+              title: "{{ notification_title_input | default('사용가능한 충전기 알림', true) or '사용가능한 충전기 알림' }}"
               message: >-
-                {% set ns = namespace(lines=[]) %}
+                {% set ns = namespace(lines=['[' ~ repeat.item.zone ~ ' 도착]']) %}
                 {% for entity_id in repeat.item.sensors %}
                   {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
+                  {% set operator = state_attr(entity_id, 'operator') %}
                   {% set avail = states(entity_id) | int(0) %}
-                  {% set total = state_attr(entity_id, 'total_chargers') %}
                   {% set fast = state_attr(entity_id, 'fast_available_chargers') | int(0) %}
                   {% set slow = state_attr(entity_id, 'slow_available_chargers') | int(0) %}
-                  {% set count_str = (avail ~ '/' ~ total ~ '대') if total is not none else (avail ~ '대') %}
                   {% if fast > 0 and slow > 0 %}
-                    {% set type_str = ' (급속 ' ~ fast ~ '·완속 ' ~ slow ~ ')' %}
+                    {% set type_str = '급속 ' ~ fast ~ '·완속 ' ~ slow %}
                   {% elif fast > 0 %}
-                    {% set type_str = ' (급속)' %}
+                    {% set type_str = '급속' %}
                   {% elif slow > 0 %}
-                    {% set type_str = ' (완속)' %}
+                    {% set type_str = '완속' %}
                   {% else %}
                     {% set type_str = '' %}
                   {% endif %}
-                  {% set ns.lines = ns.lines + [count_str ~ ' · ' ~ name ~ type_str] %}
+                  {% set parts = [] %}
+                  {% if operator %}
+                    {% set parts = parts + [operator] %}
+                  {% endif %}
+                  {% if type_str %}
+                    {% set parts = parts + [type_str] %}
+                  {% endif %}
+                  {% set parts = parts + [avail ~ '대 가능'] %}
+                  {% set ns.lines = ns.lines + [name ~ ' · ' ~ (parts | join(' / '))] %}
                 {% endfor %}
                 {{ ns.lines | join('\n') }}
 

@@ -35,6 +35,7 @@ def _available_attributes(status: StationStatus) -> dict[str, Any]:
         "stat_id": status.stat_id,
         "station_name": status.station_name,
         "address": status.address,
+        "operator": status.operator,
         "total_chargers": status.total_count,
         "charging_chargers": status.charging_count,
         "unavailable_chargers": status.unavailable_count,
