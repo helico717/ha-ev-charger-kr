@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Register EV Charging Station",
+        "description": "Enter your data.go.kr (KECO) API key and Station ID (statId).",
+        "data": {
+          "api_key": "Public Data Portal API Key",
+          "stat_id": "Station ID (statId)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the API server.",
+      "invalid_auth": "Invalid API authentication key.",
+      "station_not_found": "No chargers found for the given Station ID.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This charging station is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EV Charger KR Options",
+        "data": {
+          "scan_interval": "Polling interval (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "available_chargers": {
+        "name": "Available Chargers"
+      },
+      "charging_chargers": {
+        "name": "Charging"
+      },
+      "total_chargers": {
+        "name": "Total Chargers"
+      },
+      "unavailable_chargers": {
+        "name": "Unavailable Chargers"
+      }
+    }
+  }
+}

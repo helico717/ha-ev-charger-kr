@@ -1,0 +1,12 @@
+{
+  "domain": "ev_charger_kr",
+  "name": "EV Charger KR (한국 전기차 충전소)",
+  "codeowners": ["@helico717"],
+  "config_flow": true,
+  "documentation": "https://github.com/helico717/ha-ev-charger-kr",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/helico717/ha-ev-charger-kr/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

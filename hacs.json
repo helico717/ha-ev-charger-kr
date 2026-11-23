@@ -1,0 +1,5 @@
+{
+  "name": "EV Charger KR (한국 전기차 충전소)",
+  "render_readme": true,
+  "homeassistant": "2024.6.0"
+}
