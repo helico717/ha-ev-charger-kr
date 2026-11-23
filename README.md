@@ -1,26 +1,74 @@
 # EV Charger KR (한국 전기차 충전소)
 
-Home Assistant에서 **공공데이터포털(한국환경공단_전기자동차 충전소 정보)** API를 이용해 등록한 전기차 충전소의 **충전 가능 대수** 및 충전기 상태를 조회하는 HACS 커스텀 통합 구성요소입니다.
+Home Assistant에서 **공공데이터포털(한국환경공단_전기자동차 충전소 정보)** Open API를 이용해 사용자가 등록한 전기차 충전소의 **충전 가능 대수** 및 충전기 상태를 조회하는 HACS 커스텀 통합 구성요소입니다.
+
+---
 
 ## 주요 기능
-- UI(`Config Flow`)를 통한 API 키 및 충전소 ID(`statId`) 등록
-- 충전소별 **충전 가능 대수** 센서 (`대`)
-- **전체 충전기 수**, **충전 중 대수**, **고장/점검/통신이상 대수** 등 상태 집계
-- 급속/완속 충전기별 가용 대수 및 개별 충전기 상세 상태(`extra_state_attributes`) 제공
-- 옵션(`Options Flow`)을 통한 갱신 주기(분) 설정
 
-## 사전 준비
-1. [공공데이터포털](https://www.data.go.kr/)에서 **한국환경공단_전기자동차 충전소 정보** Open API 활용 신청
-2. 발급받은 **일반 인증키(Decoding 또는 Encoding)** 준비
-3. 조회할 충전소의 **충전소 ID (`statId`)** 확인 (예: `ME000001`, `28260005` 등)
+- **UI(`Config Flow`) 기반 간편 등록**: YAML 수정 없이 Home Assistant UI에서 API 키와 충전소 ID(`statId`) 등록
+- **충전소별 4종 센서 제공**:
+  - **충전 가능 대수** (`available_chargers`, 단위: `대`) — 상태가 `충전대기(2)`인 충전기 수
+  - **충전 중 대수** (`charging_chargers`, 단위: `대`) — 상태가 `충전중(3)`인 충전기 수
+  - **전체 충전기 수** (`total_chargers`, 단위: `대`)
+  - **사용 불가 대수** (`unavailable_chargers`, 단위: `대`) — 통신이상·운영중지·점검중·예약중 등
+- **상세 속성(`extra_state_attributes`) 제공** (`충전 가능 대수` 센서):
+  - `stat_id`, `station_name`, `address`
+  - `fast_available_chargers` (급속 충전 가능 대수), `slow_available_chargers` (완속 충전 가능 대수)
+  - `chargers` (충전기별 `charger_id`, `status`, `status_code`, `type`, `output_kw`, `updated_at`)
+- **갱신 주기 설정(`Options Flow`)**: 기본 3분 (1~60분 범위에서 변경 가능)
 
-## 설치 방법
-### HACS (사용자 지정 저장소)
-1. HACS → **통합 구성요소** → 우측 상단 메뉴 → **사용자 지정 저장소**
-2. 이 저장소 URL 추가 (카테고리: `Integration`)
-3. `EV Charger KR` 설치 후 Home Assistant 재시작
-4. **설정 → 기기 및 서비스 → 통합 구성요소 추가 → EV Charger KR** 검색 후 등록
+---
 
-### 수동 설치
-1. `custom_components/ev_charger_kr` 폴더를 Home Assistant의 `/config/custom_components/ev_charger_kr`로 복사
-2. Home Assistant 재시작
+## 1단계: 공공데이터포털 API 키 발급
+
+1. [공공데이터포털(data.go.kr)](https://www.data.go.kr/) 로그인
+2. [한국환경공단_전기자동차 충전소 정보](https://www.data.go.kr/data/15076352/openapi.do) 페이지로 이동 후 **활용신청** 클릭
+   - 개발단계/운영단계 모두 **자동승인**이며, 기본 일일 트래픽은 **1,000건**입니다.
+   - 활용 목적 입력 시 예: `Home Assistant 개인 스마트홈 전기차 충전소 상태 조회`
+3. 승인 후 **마이페이지 → Open API → 인증키 발급현황**에서 **일반 인증키(Encoding 또는 Decoding)**를 복사해 둡니다.
+   - 이 통합 구성요소는 `Encoding` / `Decoding` 키 모두 자동으로 정규화하여 처리합니다.
+   - 참고: 신규 발급 직후에는 공공데이터포털 게이트웨이 반영까지 **수 분~최대 1시간** 정도 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 발생할 수 있습니다.
+
+---
+
+## 2단계: 충전소 ID (`statId`) 확인
+
+등록하려는 충전소의 `statId` (예: `ME174013`, `28260005` 등)를 확인합니다.
+
+- **방법 A (무공해차 통합누리집)**: [무공해차 통합누리집(ev.or.kr)](https://www.ev.or.kr/) 충전소 찾기에서 충전소를 선택한 뒤 상세 정보 URL 또는 개발자 도구 네트워크 응답의 `statId` 확인
+- **방법 B (공공데이터포털 미리보기)**: `getChargerInfo` API의 `zcode`(시도 코드) 또는 `statId` 테스트 호출을 통해 충전소 목록에서 확인
+
+---
+
+## 3단계: Home Assistant에 설치
+
+### 방법 1: HACS 사용자 지정 저장소 (권장)
+
+1. Home Assistant에서 **HACS → 통합 구성요소**로 이동합니다.
+2. 우측 상단 메뉴(`⋮`) → **사용자 지정 저장소(Custom repositories)**를 선택합니다.
+3. 저장소 URL에 아래 주소를 입력하고, 카테고리는 **Integration**을 선택해 추가합니다.
+   ```text
+   https://github.com/helico717/ha-ev-charger-kr
+   ```
+4. 목록에서 **EV Charger KR (한국 전기차 충전소)**를 찾아 **다운로드**합니다.
+5. Home Assistant를 **재시작**합니다.
+
+### 방법 2: 수동 설치
+
+1. 이 저장소의 `custom_components/ev_charger_kr` 폴더를 Home Assistant 설정 디렉터리의 `/config/custom_components/ev_charger_kr` 경로로 복사합니다.
+2. Home Assistant를 **재시작**합니다.
+
+---
+
+## 4단계: 통합 구성요소 등록 및 사용
+
+1. Home Assistant에서 **설정 → 기기 및 서비스 → 통합 구성요소 추가**를 클릭합니다.
+2. **EV Charger KR**을 검색해 선택합니다.
+3. 발급받은 **공공데이터포털 API 인증키**와 **충전소 ID (`statId`)**, (선택) **충전소 별칭**을 입력합니다.
+4. 여러 충전소를 등록하려면 통합 구성요소 추가를 반복하여 충전소마다 별도 항목으로 추가할 수 있습니다.
+5. 등록 후 항목의 **구성(Configure)** 버튼을 눌러 갱신 주기(`scan_interval`, 기본 3분)를 조정할 수 있습니다.
+
+> [!TIP]
+> **일일 트래픽(1,000건) 관리 팁**  
+> 통합 구성요소는 1회 갱신 시 `getChargerStatus`를 호출하며, 기본 3분 주기로 1개 충전소 등록 시 하루 약 480건을 사용합니다. 여러 충전소를 동시에 등록하는 경우 **구성** 메뉴에서 갱신 주기를 5~10분으로 늘리는 것을 권장합니다.
