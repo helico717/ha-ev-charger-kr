@@ -14,10 +14,11 @@ blueprint:
           filter:
             - domain: person
     target_zone:
-      name: 진입 감지 구역 (Zone)
-      description: 진입 시 알림을 보낼 Home Assistant 구역(집, 직장 등)을 선택하세요.
+      name: 진입 감지 구역 (Zone, 1개 이상 선택)
+      description: 진입 시 알림을 보낼 Home Assistant 구역(집, 직장 등)을 하나 이상 선택하세요.
       selector:
         entity:
+          multiple: true
           filter:
             - domain: zone
     charger_sensors:
@@ -98,7 +99,7 @@ actions:
         device_id: !input notify_device
         title: !input notification_title
         message: >-
-          {% set zone_name = state_attr(target_zone_input, 'friendly_name') or target_zone_input %}
+          {% set zone_name = (trigger.zone.attributes.friendly_name if trigger is defined and trigger.zone is defined else (state_attr(target_zone_input[0], 'friendly_name') if target_zone_input is sequence and target_zone_input | length > 0 else '지정 구역')) %}
           {% set ns = namespace(lines=[zone_name ~ ' 도착 — 현재 충전 가능 대수']) %}
           {% for entity_id in charger_sensors_input %}
             {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
