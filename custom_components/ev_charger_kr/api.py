@@ -228,15 +228,13 @@ class EvChargerApiClient:
         stat_id: str,
         station_name: str | None = None,
     ) -> StationStatus:
-        """Fetch real-time charger status, enriching with cached metadata if needed."""
-        if stat_id not in self._charger_metadata_cache:
-            return await self.async_get_station_info(stat_id)
+        """Fetch current station and charger status via getChargerInfo.
 
-        payload = await self._get_json(ENDPOINT_CHARGER_STATUS, {"statId": stat_id})
-        items = extract_items(payload)
-        return aggregate_station_status(
-            stat_id=stat_id,
-            items=items,
-            fallback_station_name=station_name or self._station_name_cache.get(stat_id),
-            charger_metadata=self._charger_metadata_cache.get(stat_id),
-        )
+        Note: getChargerStatus only returns chargers whose status changed
+        within a short recent period, so getChargerInfo is used to retrieve
+        every charger's current state reliably.
+        """
+        status = await self.async_get_station_info(stat_id)
+        if station_name and status.station_name == stat_id:
+            status.station_name = station_name
+        return status
