@@ -90,7 +90,7 @@ blueprint:
                   integration: ev_charger_kr
     notification_title:
       name: 알림 제목
-      description: 모바일 알림 상단에 표시할 제목을 입력하세요. (기본값: 사용가능한 충전기 알림)
+      description: "모바일 알림 상단에 표시할 제목을 입력하세요. (기본값: 사용가능한 충전기 알림)"
       default: "사용가능한 충전기 알림"
       selector:
         text:
@@ -206,12 +206,14 @@ actions:
                   {% set parts = [] %}
                   {% if operator %}
                     {% set parts = parts + [operator] %}
+                  {% else %}
+                    {% set parts = parts + [name] %}
                   {% endif %}
                   {% if type_str %}
                     {% set parts = parts + [type_str] %}
                   {% endif %}
                   {% set parts = parts + [avail ~ '대 가능'] %}
-                  {% set ns.lines = ns.lines + [name ~ ' · ' ~ (parts | join(' / '))] %}
+                  {% set ns.lines = ns.lines + [parts | join(' / ')] %}
                 {% endfor %}
                 {{ ns.lines | join('\n') }}
 
