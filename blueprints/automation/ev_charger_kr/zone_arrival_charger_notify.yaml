@@ -187,7 +187,7 @@ actions:
               device_id: !input notify_device
               title: !input notification_title
               message: >-
-                {% set ns = namespace(lines=['[' ~ repeat.item.zone ~ ' 도착]']) %}
+                {% set ns = namespace(lines=[]) %}
                 {% for entity_id in repeat.item.sensors %}
                   {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
                   {% set operator = state_attr(entity_id, 'operator') %}
