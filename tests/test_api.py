@@ -35,6 +35,7 @@ from ev_charger_kr_test_pkg.api import (  # noqa: E402
     aggregate_station_status,
     extract_items,
     normalize_service_key,
+    search_stations_from_items,
 )
 
 
@@ -152,6 +153,41 @@ class TestEvChargerApi(unittest.TestCase):
     def test_aggregate_station_status_empty_raises(self) -> None:
         with self.assertRaises(EvChargerNotFoundError):
             aggregate_station_status("ME000001", [])
+
+    def test_search_stations_from_items(self) -> None:
+        items = [
+            {
+                "statId": "PI712604",
+                "statNm": "의왕반도보라빌리지2단지",
+                "addr": "경기도 의왕시 갈미로 32",
+                "busiNm": "GS차지비",
+                "chgerId": "01",
+            },
+            {
+                "statId": "PI712604",
+                "statNm": "의왕반도보라빌리지2단지",
+                "addr": "경기도 의왕시 갈미로 32",
+                "busiNm": "GS차지비",
+                "chgerId": "02",
+            },
+            {
+                "statId": "CV000372",
+                "statNm": "남서울대학교",
+                "addr": "충청남도 천안시 서북구 성환읍 대학로 91",
+                "busiNm": "채비",
+                "chgerId": "01",
+            },
+        ]
+        results = search_stations_from_items(items, "반도보라")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].stat_id, "PI712604")
+        self.assertEqual(results[0].charger_count, 2)
+        self.assertEqual(results[0].busi_name, "GS차지비")
+
+        addr_results = search_stations_from_items(items, "갈미로 32")
+        self.assertEqual([r.stat_id for r in addr_results], ["PI712604"])
+
+        self.assertEqual(search_stations_from_items(items, "   "), [])
 
 
 if __name__ == "__main__":

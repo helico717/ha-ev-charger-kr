@@ -48,6 +48,17 @@ class ChargerDetail:
 
 
 @dataclass
+class StationSummary:
+    """Summary of a charging station returned by station search."""
+
+    stat_id: str
+    station_name: str
+    address: str | None = None
+    busi_name: str | None = None
+    charger_count: int = 0
+
+
+@dataclass
 class StationStatus:
     """Aggregated status for an EV charging station."""
 
@@ -61,6 +72,44 @@ class StationStatus:
     fast_available_count: int = 0
     slow_available_count: int = 0
     chargers: list[ChargerDetail] = field(default_factory=list)
+
+
+def search_stations_from_items(
+    items: list[dict[str, Any]],
+    keyword: str,
+) -> list[StationSummary]:
+    """Filter and group raw charger info items into matching station summaries."""
+    needle = keyword.strip().lower()
+    if not needle:
+        return []
+
+    grouped: dict[str, StationSummary] = {}
+    for item in items:
+        stat_id = str(item.get("statId", "")).strip()
+        if not stat_id:
+            continue
+        station_name = str(item.get("statNm") or stat_id).strip()
+        address = str(item.get("addr") or "").strip() or None
+        busi_name = str(item.get("busiNm") or item.get("bnm") or "").strip() or None
+
+        haystack = " ".join(
+            part for part in (station_name, address or "", busi_name or "", stat_id)
+        ).lower()
+        if needle not in haystack:
+            continue
+
+        if stat_id not in grouped:
+            grouped[stat_id] = StationSummary(
+                stat_id=stat_id,
+                station_name=station_name,
+                address=address,
+                busi_name=busi_name,
+                charger_count=1,
+            )
+        else:
+            grouped[stat_id].charger_count += 1
+
+    return sorted(grouped.values(), key=lambda s: (s.station_name, s.stat_id))
 
 
 def normalize_service_key(api_key: str) -> str:
@@ -192,7 +241,9 @@ class EvChargerApiClient:
         self._charger_metadata_cache: dict[str, dict[str, dict[str, str | None]]] = {}
         self._station_name_cache: dict[str, str] = {}
 
-    async def _get_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def _get_json(
+        self, url: str, params: dict[str, Any], timeout: int = 20
+    ) -> dict[str, Any]:
         query = {
             "serviceKey": self._service_key,
             "dataType": "JSON",
@@ -200,12 +251,44 @@ class EvChargerApiClient:
             "numOfRows": 100,
             **params,
         }
-        async with self._session.get(url, params=query, timeout=15) as response:
+        async with self._session.get(url, params=query, timeout=timeout) as response:
             if response.status in {401, 403}:
                 raise EvChargerAuthError(f"HTTP {response.status}")
             if response.status != 200:
                 raise EvChargerApiError(f"HTTP {response.status}")
             return await response.json(content_type=None)
+
+    async def async_search_stations(
+        self,
+        zcode: str,
+        keyword: str,
+        max_pages: int = 10,
+    ) -> list[StationSummary]:
+        """Search stations in a region (zcode) matching a name/address keyword."""
+        num_of_rows = 9999
+        all_items: list[dict[str, Any]] = []
+
+        for page in range(1, max_pages + 1):
+            payload = await self._get_json(
+                ENDPOINT_CHARGER_INFO,
+                {"zcode": zcode, "pageNo": page, "numOfRows": num_of_rows},
+                timeout=30,
+            )
+            items = extract_items(payload)
+            if not items:
+                break
+            all_items.extend(items)
+
+            try:
+                total_count = int(payload.get("totalCount", 0))
+            except (TypeError, ValueError):
+                total_count = 0
+            if total_count and page * num_of_rows >= total_count:
+                break
+            if len(items) < num_of_rows:
+                break
+
+        return search_stations_from_items(all_items, keyword)
 
     async def async_get_station_info(self, stat_id: str) -> StationStatus:
         """Fetch full station info (including station name and charger types)."""

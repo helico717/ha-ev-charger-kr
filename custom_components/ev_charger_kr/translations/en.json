@@ -3,10 +3,19 @@
     "step": {
       "user": {
         "title": "Register EV Charging Station",
-        "description": "Enter your data.go.kr (KECO) API key and Station ID (statId).",
+        "description": "Enter your data.go.kr API key, then select a region and enter a station name or address keyword to search. You can also enter a Station ID (statId) directly if known.",
         "data": {
           "api_key": "Public Data Portal API Key",
-          "stat_id": "Station ID (statId)"
+          "zcode": "Region (Si/Do)",
+          "keyword": "Station Name or Address Keyword",
+          "stat_id": "Station ID (statId, optional)"
+        }
+      },
+      "select_station": {
+        "title": "Select Charging Station",
+        "description": "Choose the charging station to add from the search results.",
+        "data": {
+          "stat_id": "Charging Station"
         }
       }
     },
@@ -14,6 +23,8 @@
       "cannot_connect": "Failed to connect to the API server.",
       "invalid_auth": "Invalid API authentication key.",
       "station_not_found": "No chargers found for the given Station ID.",
+      "no_stations_found": "No charging stations matched your region and keyword.",
+      "missing_search_or_id": "Enter a search keyword or a Station ID (statId).",
       "unknown": "Unexpected error occurred."
     },
     "abort": {
