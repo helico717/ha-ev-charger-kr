@@ -50,10 +50,9 @@ def _build_entry_title(stations: list[dict[str, str]]) -> str:
     """Build a concise config entry title from one or more stations."""
     if not stations:
         return "EV Charger KR"
-    first_name = stations[0].get(CONF_STATION_NAME) or stations[0][CONF_STATION_ID]
     if len(stations) == 1:
-        return first_name
-    return f"{first_name} 외 {len(stations) - 1}곳"
+        return stations[0].get(CONF_STATION_NAME) or stations[0][CONF_STATION_ID]
+    return f"EV Charger KR ({len(stations)}개 충전소)"
 
 
 def _station_checkbox_selector(results: list[StationSummary]) -> SelectSelector:
@@ -235,6 +234,13 @@ class EvChargerOptionsFlow(OptionsFlow):
         self._config_entry = config_entry
         self._search_results: list[StationSummary] = []
 
+    def _sync_entry_title(self, stations: list[dict[str, str]]) -> None:
+        """Update the parent config entry title to reflect current station count."""
+        self.hass.config_entries.async_update_entry(
+            self._config_entry,
+            title=_build_entry_title(stations),
+        )
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -318,6 +324,7 @@ class EvChargerOptionsFlow(OptionsFlow):
                         {CONF_STATION_ID: sid, CONF_STATION_NAME: sname}
                         for sid, sname in existing.items()
                     ]
+                    self._sync_entry_title(stations)
                     return self.async_create_entry(
                         title="",
                         data={**self._config_entry.options, CONF_STATIONS: stations},
@@ -380,6 +387,7 @@ class EvChargerOptionsFlow(OptionsFlow):
                     {CONF_STATION_ID: sid, CONF_STATION_NAME: sname}
                     for sid, sname in existing.items()
                 ]
+                self._sync_entry_title(stations)
                 return self.async_create_entry(
                     title="",
                     data={**self._config_entry.options, CONF_STATIONS: stations},
@@ -418,6 +426,7 @@ class EvChargerOptionsFlow(OptionsFlow):
                     for sid in kept_ids
                     if sid in existing
                 ]
+                self._sync_entry_title(stations)
                 return self.async_create_entry(
                     title="",
                     data={**self._config_entry.options, CONF_STATIONS: stations},
