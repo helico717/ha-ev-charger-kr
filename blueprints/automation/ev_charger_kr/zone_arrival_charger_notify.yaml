@@ -90,8 +90,8 @@ blueprint:
                   integration: ev_charger_kr
     notification_title:
       name: 알림 제목
-      description: "모바일 알림 상단에 표시할 제목을 입력하세요. (기본값: 사용가능한 충전기 알림)"
-      default: "사용가능한 충전기 알림"
+      description: "모바일 알림 상단에 표시할 제목을 입력하세요. (기본값: ⚡ 사용가능한 충전기 알림)"
+      default: "⚡ 사용가능한 충전기 알림"
       selector:
         text:
     refresh_before_notify:
@@ -195,25 +195,16 @@ actions:
                   {% set fast = state_attr(entity_id, 'fast_available_chargers') | int(0) %}
                   {% set slow = state_attr(entity_id, 'slow_available_chargers') | int(0) %}
                   {% if fast > 0 and slow > 0 %}
-                    {% set type_str = '급속 ' ~ fast ~ '·완속 ' ~ slow %}
+                    {% set type_str = ' (급속 ' ~ fast ~ '·완속 ' ~ slow ~ ')' %}
                   {% elif fast > 0 %}
-                    {% set type_str = '급속' %}
+                    {% set type_str = ' (급속)' %}
                   {% elif slow > 0 %}
-                    {% set type_str = '완속' %}
+                    {% set type_str = ' (완속)' %}
                   {% else %}
                     {% set type_str = '' %}
                   {% endif %}
-                  {% set parts = [] %}
-                  {% if operator %}
-                    {% set parts = parts + [operator] %}
-                  {% else %}
-                    {% set parts = parts + [name] %}
-                  {% endif %}
-                  {% if type_str %}
-                    {% set parts = parts + [type_str] %}
-                  {% endif %}
-                  {% set parts = parts + [avail ~ '대 가능'] %}
-                  {% set ns.lines = ns.lines + [parts | join(' / ')] %}
+                  {% set provider = operator if operator else name %}
+                  {% set ns.lines = ns.lines + ['▫️ ' ~ avail ~ '대 가능 — ' ~ provider ~ type_str] %}
                 {% endfor %}
                 {{ ns.lines | join('\n') }}
 
