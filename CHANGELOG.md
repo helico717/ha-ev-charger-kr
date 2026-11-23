@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MIT 라이선스 파일([LICENSE](LICENSE)) 추가 및 HACS 검증 통과를 위한 GitHub 저장소 Topics 설정
+
 ## [0.2.0] - 2026-11-23
 
 ### Added
