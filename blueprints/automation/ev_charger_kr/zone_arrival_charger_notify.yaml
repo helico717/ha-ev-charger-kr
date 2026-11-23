@@ -1,0 +1,121 @@
+blueprint:
+  name: EV Charger KR - 구역 진입 시 충전 가능 대수 알림
+  description: >-
+    지정한 사용자(person)가 설정된 구역(zone)에 진입하면, 선택한 1개 이상의
+    전기차 충전소 센서의 현재 충전 가능 대수를 모바일 앱 알림으로 전송합니다.
+  domain: automation
+  source_url: https://github.com/helico717/ha-ev-charger-kr/blob/main/blueprints/automation/ev_charger_kr/zone_arrival_charger_notify.yaml
+  input:
+    person_entity:
+      name: 추적할 사용자
+      description: 구역 진입 여부를 감지할 Person 엔티티를 선택하세요.
+      selector:
+        entity:
+          filter:
+            - domain: person
+    target_zone:
+      name: 진입 감지 구역 (Zone)
+      description: 진입 시 알림을 보낼 Home Assistant 구역(집, 직장 등)을 선택하세요.
+      selector:
+        entity:
+          filter:
+            - domain: zone
+    charger_sensors:
+      name: 충전 가능 대수 센서 (1개 이상 선택)
+      description: 알림에 포함할 EV Charger KR '충전 가능 대수' 센서를 하나 이상 선택하세요.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: sensor
+              integration: ev_charger_kr
+    notify_device:
+      name: 알림을 받을 모바일 기기
+      description: Home Assistant Companion 앱이 설치된 모바일 기기를 선택하세요.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    notification_title:
+      name: 알림 제목
+      default: "전기차 충전소 현황 안내"
+      selector:
+        text:
+    refresh_before_notify:
+      name: 알림 전 최신 상태 즉시 갱신
+      description: 구역에 진입한 직후 API에서 최신 충전기 상태를 1회 새로 조회한 뒤 알림을 보냅니다.
+      default: true
+      selector:
+        boolean:
+    only_when_available:
+      name: 충전 가능 대수가 1대 이상일 때만 알림
+      description: 선택한 모든 충전소가 만차(0대)일 때는 알림을 보내지 않습니다.
+      default: false
+      selector:
+        boolean:
+
+variables:
+  charger_sensors_input: !input charger_sensors
+  target_zone_input: !input target_zone
+  refresh_before_notify_input: !input refresh_before_notify
+  only_when_available_input: !input only_when_available
+
+triggers:
+  - trigger: zone
+    entity_id: !input person_entity
+    zone: !input target_zone
+    event: enter
+
+conditions: []
+
+actions:
+  - if:
+      - condition: template
+        value_template: "{{ refresh_before_notify_input }}"
+    then:
+      - action: homeassistant.update_entity
+        target:
+          entity_id: "{{ charger_sensors_input }}"
+      - delay:
+          seconds: 2
+  - if:
+      - condition: template
+        value_template: >-
+          {% if not only_when_available_input %}
+            true
+          {% else %}
+            {% set ns = namespace(has_avail=false) %}
+            {% for entity_id in charger_sensors_input %}
+              {% if states(entity_id) | int(0) > 0 %}
+                {% set ns.has_avail = true %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.has_avail }}
+          {% endif %}
+    then:
+      - domain: mobile_app
+        type: notify
+        device_id: !input notify_device
+        title: !input notification_title
+        message: >-
+          {% set zone_name = state_attr(target_zone_input, 'friendly_name') or target_zone_input %}
+          {% set ns = namespace(lines=[zone_name ~ ' 도착 — 현재 충전 가능 대수']) %}
+          {% for entity_id in charger_sensors_input %}
+            {% set name = state_attr(entity_id, 'station_name') or state_attr(entity_id, 'friendly_name') or entity_id %}
+            {% set avail = states(entity_id) %}
+            {% set fast = state_attr(entity_id, 'fast_available_chargers') %}
+            {% set slow = state_attr(entity_id, 'slow_available_chargers') %}
+            {% set detail = [] %}
+            {% if fast is not none and fast | int(0) > 0 %}
+              {% set detail = detail + ['급속 ' ~ fast ~ '대'] %}
+            {% endif %}
+            {% if slow is not none and slow | int(0) > 0 %}
+              {% set detail = detail + ['완속 ' ~ slow ~ '대'] %}
+            {% endif %}
+            {% set suffix = ' (' ~ (detail | join(', ')) ~ ')' if detail | length > 0 else '' %}
+            {% set ns.lines = ns.lines + ['• ' ~ name ~ ': ' ~ avail ~ '대' ~ suffix] %}
+          {% endfor %}
+          {{ ns.lines | join('\n') }}
+
+mode: single
+max_exceeded: silent

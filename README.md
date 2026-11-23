@@ -77,3 +77,17 @@ Home Assistant에서 **공공데이터포털(한국환경공단_전기자동차 
 >
 > - 각 충전소 항목마다 주기를 다르게 설정할 수 있으므로, 자주 확인하는 곳은 짧게(5분), 가끔 참고하는 곳은 길게(15~30분) 설정하면 더 효율적입니다.
 > - 1,000건 이상이 필요한 경우 공공데이터포털에서 **운영계정** 전환을 신청하거나, 갱신 주기를 길게 두고 필요 시에만 HA 자동화(`homeassistant.update_entity`)로 갱신할 수 있습니다.
+
+---
+
+## 자동화 블루프린트 (구역 진입 시 충전 가능 대수 알림)
+
+설정한 구역(Zone)에 사용자가 진입하면 선택한 1개 이상의 충전소 센서에서 현재 충전 가능 대수(급속/완속 구분 포함)를 모바일 앱 알림으로 보내는 블루프린트를 제공합니다.
+
+- **블루프린트 경로**: `blueprints/automation/ev_charger_kr/zone_arrival_charger_notify.yaml`
+- **가져오기 URL**:
+  ```text
+  https://github.com/helico717/ha-ev-charger-kr/blob/main/blueprints/automation/ev_charger_kr/zone_arrival_charger_notify.yaml
+  ```
+- **Home Assistant에서 등록**: **설정 → 자동화 및 장면 → 블루프린트 → 블루프린트 가져오기**에 위 URL을 붙여넣고, **구역(Zone)**·**사용자(Person)**·**충전 가능 대수 센서(1개 이상)**·**모바일 기기**를 선택하면 바로 사용할 수 있습니다.
+
