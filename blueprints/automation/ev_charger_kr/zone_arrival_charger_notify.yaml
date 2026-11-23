@@ -90,7 +90,7 @@ blueprint:
                   integration: ev_charger_kr
     notification_title:
       name: 알림 제목
-      description: 모바일 알림 상단에 고정으로 표시할 제목입니다.
+      description: 모바일 알림 상단에 표시할 제목을 입력하세요. (기본값: 사용가능한 충전기 알림)
       default: "사용가능한 충전기 알림"
       selector:
         text:
@@ -114,7 +114,6 @@ variables:
   zone_2_sensors_input: !input zone_2_sensors
   zone_3_input: !input zone_3
   zone_3_sensors_input: !input zone_3_sensors
-  notification_title_input: !input notification_title
   refresh_before_notify_input: !input refresh_before_notify
   only_when_available_input: !input only_when_available
 
@@ -186,7 +185,7 @@ actions:
             - domain: mobile_app
               type: notify
               device_id: !input notify_device
-              title: "{{ notification_title_input | default('사용가능한 충전기 알림', true) or '사용가능한 충전기 알림' }}"
+              title: !input notification_title
               message: >-
                 {% set ns = namespace(lines=['[' ~ repeat.item.zone ~ ' 도착]']) %}
                 {% for entity_id in repeat.item.sensors %}
